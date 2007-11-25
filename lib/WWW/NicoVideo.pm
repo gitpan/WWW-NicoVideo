@@ -12,21 +12,14 @@ use LWP::UserAgent;
 use HTTP::Cookies;
 use URI;
 use URI::QueryParam;
-use URI::Escape;
-use Web::Scraper;
 use WWW::NicoVideo::Entry;
+use WWW::NicoVideo::Scraper;
+use WWW::NicoVideo::URL;
 
 __PACKAGE__->mk_accessors(qw[agent retry retryInterval mail passwd]);
 
-our $VERSION = "0.01";
+our $VERSION = "0.02";
 our $AGENT_NAME = "@{[__PACKAGE__]}/$VERSION)";
-our %NICO_URL = (top => "http://www.nicovideo.jp/",
-		 base => "http://www.nicovideo.jp/",
-		 recent => "http://www.nicovideo.jp/recent",
-		 newarrival => "http://www.nicovideo.jp/newarrival",
-		 img => "http://res.nicovideo.jp/img/tpl/head/logo/rc.gif",
-		 login => "https://secure.nicovideo.jp/secure/login?site=niconico",
-		 fmt => "http://www.nicovideo.jp/%s/%s");
 
 sub new
 {
@@ -68,7 +61,7 @@ sub login
 
   my $login_ok = 0;
   if($has_cookie) {
-    my $res = $ua->get($NICO_URL{top});
+    my $res = $ua->get(nicoURL("top"));
     if($res->is_success and
        not $res->as_string =~ /<form [^<>]*name="login"/) {
       $login_ok = 1;
@@ -79,7 +72,7 @@ sub login
     $self->{loginOk} = 1;
     return 1;
   } else {
-    my $res = $ua->post($NICO_URL{login},
+    my $res = $ua->post(nicoURL("login"),
 			{mail => $self->{mail},
 			 password => $self->{passwd}});
 
@@ -114,7 +107,7 @@ sub getEntries
   my $type = shift;
   my %opts = @_;
   my @keys = (@{$opts{keys} || []},
-	      ($opts{key} // ()));
+	      (defined $opts{key}? $opts{key}: ()));
   my $page = $opts{page};
   my $sort = $opts{sort};
   my $order = $opts{order};
@@ -125,10 +118,10 @@ sub getEntries
     return wantarray? (): undef;
   }
 
-  my $url = new URI($self->getURL($type, @keys));
-  $sort // $url->query_param_append(sort => $sort);
-  $order // $url->query_param_append(order => $order);
-  $page // $url->query_param_append(page => $page);
+  my $url = new URI(nicoURL($type, @keys));
+  $url->query_param_append(sort => $sort) if(defined $sort);
+  $url->query_param_append(order => $order) if(defined $order);
+  $url->query_param_append(page => $page) if(defined $page);
 
   my $count = 0;
   my $res;
@@ -154,68 +147,10 @@ sub getEntries
 	  $html =~ m{^<p class="TXT12">【ご注意】<br>}m # access blocking
 	 );
 
-  my $scraper = scraper {
-    process('//div[@class="thumb_frm"]',
-	    'entries[]' => scraper {
-	      process('/div/div/div/p/a/img',
-		      imgUrl => '@src',
-		      imgWidth => '@width',
-		      imgHeight =>  '@height');
-	      process('/div/div/p[2]/strong',
-		      lengthStr => 'TEXT');
-	      process('/div/div/p[2]/strong[2]',
-		      numViewsStr => 'TEXT');
-	      process('/div/div/p[2]/strong[3]',
-		      numCommentsStr => 'TEXT');
-	      process('/div/div[2]/p/a[@class="video"]',
-		      title => 'TEXT',
-		      url => '@href');
-	      process('/div/div[2]/p',
-		      desc => sub {
-			shift->content_array_ref->[-1] =~ /\s*(.*)/; $1 }),
-	      process('/div/div[2]/div/p/strong',
-		      comments => 'TEXT');
-	    });
-  };
-
-  my @res = @{$scraper->scrape($html)->{entries} || []};
-
-  foreach my $v (@res) {
-    $v->{id} = $v->{url};
-    $v->{id} =~ s{.*/}{};
-    my($m, $s) = ($v->{lengthStr} =~ /(?:(\d+)分)?(\d+)秒/);
-    $v->{length} = $m*60 + $s;
-    $v->{numViews} = $v->{numViewsStr};
-    $v->{numViews} =~ tr/,//d;
-    $v->{numComments} = $v->{numCommentsStr};
-    $v->{numComments} =~ tr/,//d;
-    $v->{url} = $NICO_URL{base} . $v->{url};
-  }
-
-  @res = map { WWW::NicoVideo::Entry->new($_) } @res;
+  my $scraper = scraper_entries();
+  my @res = (map { WWW::NicoVideo::Entry->new($_) }
+	     @{$scraper->scrape($html)->{entries} || []});
   wantarray? @res: \@res;
-}
-
-sub getURL
-{
-  my $self = shift;
-  my $type = shift;
-  my @keys = @_;
-
-  $type = ":top" if(!$type and !@keys);
-
-  if(defined $type and $type =~ /^:(.+)/) {
-    return $NICO_URL{$1} || undef;
-  } elsif(defined $type and @keys) {
-    my $joined_keys = join " ", @keys;
-    if(utf8::is_utf8($joined_keys)) {
-      utf8::encode($joined_keys);
-    }
-    return sprintf($NICO_URL{fmt},
-		   $type, uri_escape($joined_keys));
-  } else {
-    confess "Invalid $type (keys = @keys)";
-  }
 }
 
 "Ritsuko";
@@ -232,7 +167,7 @@ WWW::NicoVideo - Perl interface to Nico Nico Video service
   use WWW::NicoVideo;
   binmode STDOUT, ":encoding(euc-jp)";
 
-  my $nv = new WWW::NicoVideo(mail => 'ritsuko@example.com',
+  my $nv = new WWW::NicoVideo(mail => 'ritsuko@ritsuko.org',
                               passwd => "ritchan-wa-kawaiidesuyo");
   $nv->login or die "Login failed";
 
@@ -312,7 +247,7 @@ Sort type. "f" for post date, "v" for number of views,
 
 =item order
 
-Sort order. "a" for ASC, "d" for DESC.
+Sort order. "a" for ASC, "d" or undef for DESC.
 
 =back
 
