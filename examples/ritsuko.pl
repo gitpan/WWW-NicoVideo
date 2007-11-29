@@ -1,7 +1,7 @@
 #! /usr/bin/perl
 
 # WWW::NicoVideo example
-# usage: perl -Ilib examples/ritsuko.pl ritsuko@ritsuko.org your-password
+# usage: perl -Ilib examples/ritsuko.pl your-mail@ritsuko.org your-password
 
 use utf8;
 use strict;

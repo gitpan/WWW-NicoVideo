@@ -18,7 +18,7 @@ use WWW::NicoVideo::URL;
 
 __PACKAGE__->mk_accessors(qw[agent retry retryInterval mail passwd]);
 
-our $VERSION = "0.02";
+our $VERSION = "0.03";
 our $AGENT_NAME = "@{[__PACKAGE__]}/$VERSION)";
 
 sub new
@@ -266,5 +266,11 @@ HIRATA Yasuyuki, E<lt>yasu@REMOVE-THIS-PART.asuka.netE<gt>
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself, either Perl version 5.8.8 or,
 at your option, any later version of Perl 5 you may have available.
+
+=head1 SUBVERSION REPOSITORY
+
+The latest version of this module is available
+from our Subversion repository at:
+  L<http://svn.coderepos.org/share/lang/perl/WWW-NicoVideo/>
 
 =cut

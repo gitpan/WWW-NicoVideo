@@ -31,16 +31,16 @@ sub scraper_entries()
 		      imgUrl => '@src',
 		      imgWidth => '@width',
 		      imgHeight =>  '@height');
-	      process('/div/div/p[2]/strong',
+	      process('/div/div/p/strong',
 		      lengthStr => 'TEXT',
 		      length => sub { shift->as_text =~ /(?:(\d+)分)?(\d+)秒/;
 				      $1*60 + $2 });
-	      process('/div/div/p[2]/strong[2]',
+	      process('/div/div/p/strong[2]',
 		      numViewsStr => 'TEXT',
 		      numViews => sub { my $x = shift->as_text;
 					$x =~ tr/,//d;
 					$x });
-	      process('/div/div/p[2]/strong[3]',
+	      process('/div/div/p/strong[3]',
 		      numCommentsStr => 'TEXT',
 		      numComments => sub { my $x = shift->as_text;
 					   $x =~ tr/,//d;
@@ -48,12 +48,14 @@ sub scraper_entries()
 	      process('/div/div[2]/p/a[@class="video"]',
 		      title => 'TEXT',
 		      id => sub { shift->attr("href") =~ /(\w+)$/; $1 },
-		      url => sub { nicoURL("base") . shift->attr("href") });
+		      url => '@href');
 	      process('/div/div[2]/p',
 		      desc => sub { shift->content_array_ref->[-1] =~ /\s*(.*)/;
 				    $1 }),
-				    process('/div/div[2]/div/p/strong',
-					    comments => 'TEXT');
+	      process('/div/div[2]/div/p/strong',
+		      comments => sub { my $x = shift->as_text;
+					$x =~ s/\s+$//;
+					$x; });
 	    });
   };
 }
